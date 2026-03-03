@@ -1,0 +1,47 @@
+# Role: Expert Python Developer / AI Engineer
+# Task: Build a Local "Resume-to-Job" Alignment Chatbot using Streamlit and OpenAI.
+
+## Project Overview:
+Create a locally deployable Python application with a chatbot UI. The app helps users customize their resumes by comparing them to a specific job post URL. 
+
+## Tech Stack & Configuration:
+- Framework: Streamlit
+- LLM: OpenAI API (via openai library)
+- Secret Management: Use a `config.py` file or Streamlit `secrets` for the OpenAI API Key. 
+- Infrastructure Placeholder: Include a commented-out section for AWS Bedrock (boto3) integration as an alternative provider.
+- Parsing Libraries: `PyPDF2` or `pdfplumber` (for PDF) and `python-docx` (for DOCX).
+- Scraping: `BeautifulSoup4` or `requests` to extract text from the Job URL.
+
+## Application Logic & Phases:
+
+### Phase 1: Sidebar & Global Settings
+- Add a sidebar with a slider for "Minimum Match Percentage" (Default: 25%).
+- Add a "Reset Session" button to clear chat history.
+
+### Phase 2: User Input & Validation
+- Chatbot persona: "Career Coach AI".
+- Bot initiates: "Hello! Please upload your resume (PDF/DOCX) and paste the Job Post URL to get started."
+- Validate the URL format and check if the file is uploaded before proceeding.
+
+### Phase 3: Extraction & Analysis
+- Extract text from the resume: focus on Years of Experience, Skills, Certifications, Degrees.
+- Extract text from the Job URL: focus on Title, Location, Requirements, Salary (if available), and Technologies.
+- Comparison Logic: Use OpenAI to calculate a "Match Score (%)" based on the overlap of skills and experience.
+
+### Phase 4: Conditional Workflow
+- IF Match < [User Defined %]:
+    - Display: "Match Score: X%. This might not be the best fit."
+    - Action: Suggest 3 specific skills or certifications the user should acquire before applying. 
+- IF Match >= [User Defined %]:
+    - Display: "Match Score: X%. Great potential!"
+    - Action: Generate a "Resume Gap Dashboard" (Table) showing: [Requirement] | [Status: Matched/Missing] | [Suggestion].
+
+### Phase 5: Interactive Coaching
+- The bot asks: "Would you like to refine your resume for the [Missing Skill]?"
+- Provide 2-3 specific questions to help the user uncover "hidden" experience they might have forgotten to list.
+- Final output: A text block of "Highlighted Skills" the user should add to their resume's summary or skills section.
+
+## User Interface Requirements:
+- Use `st.chat_message` for a modern look.
+- Use `st.status` or `st.spinner` during the analysis phase.
+- Ensure the code is modular (separate functions for parsing, API calls, and UI).
