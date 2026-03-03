@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 import requests
 import re
 from typing import Dict, List, Tuple, Optional
+from urllib.parse import urlparse
 
 def _contains_keyword(text: str, keyword: str) -> bool:
     """Check keyword presence using boundary-aware matching."""
@@ -51,11 +52,41 @@ def extract_text_from_docx(docx_file) -> str:
 
 def extract_text_from_url(url: str) -> str:
     """Extract text content from job posting URL."""
+    text, _ = extract_text_from_url_with_reason(url)
+    return text
+
+def extract_text_from_url_with_reason(url: str) -> Tuple[str, Optional[str]]:
+    """Extract text from a job URL and return a user-friendly reason on failure."""
+    blocked_domains = {
+        'indeed.com': 'Indeed',
+        'naukri.com': 'Naukri',
+        'linkedin.com': 'LinkedIn'
+    }
+
+    domain = urlparse(url).netloc.lower()
+    platform_name = None
+    for known_domain, name in blocked_domains.items():
+        if known_domain in domain:
+            platform_name = name
+            break
+
+    failure_hint = (
+        f"{platform_name} often blocks automated extraction. "
+        "Paste the job description manually in the text box below."
+        if platform_name
+        else "This job page may block automated extraction. Paste the job description manually."
+    )
+
     try:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9'
         }
-        response = requests.get(url, headers=headers, timeout=10)
+        response = requests.get(url, headers=headers, timeout=12)
+
+        if response.status_code in (401, 403, 429):
+            return "", f"Unable to access this URL (HTTP {response.status_code}). {failure_hint}"
+
         response.raise_for_status()
         
         soup = BeautifulSoup(response.content, 'html.parser')
@@ -70,11 +101,26 @@ def extract_text_from_url(url: str) -> str:
         # Clean up whitespace
         lines = [line.strip() for line in text.splitlines()]
         text = ' '.join(line for line in lines if line)
+
+        text_lower = text.lower()
+        blocked_or_shell_markers = [
+            'access denied',
+            'unauthorized',
+            'captcha',
+            'verify you are human',
+            'unusual traffic',
+            'this page could not be found',
+            'jobdetailsresp',
+            'loading...'
+        ]
+
+        if len(text) < 300 or any(marker in text_lower for marker in blocked_or_shell_markers):
+            return "", failure_hint
         
-        return text
+        return text, None
     except Exception as e:
         print(f"Error extracting URL text: {e}")
-        return ""
+        return "", failure_hint
 
 def extract_resume_info(text: str) -> Dict[str, List[str]]:
     """Extract key information from resume text."""

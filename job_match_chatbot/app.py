@@ -1,7 +1,7 @@
 import streamlit as st
 import os
 from utils import (
-    extract_text_from_pdf, extract_text_from_docx, extract_text_from_url,
+    extract_text_from_pdf, extract_text_from_docx, extract_text_from_url_with_reason,
     extract_resume_info, extract_job_info, calculate_match_score
 )
 from ai import (
@@ -20,37 +20,54 @@ st.set_page_config(
 # Custom CSS
 st.markdown("""
 <style>
+    .stApp {
+        background: #f7f8fa;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    .main .block-container {
+        max-width: 1080px;
+        padding-top: 1.6rem;
+        padding-bottom: 2rem;
+    }
+
     .main-header {
         font-size: 2.5rem;
-        font-weight: bold;
-        color: #1E88E5;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: #111111;
+        text-align: center;
+        margin-bottom: 0.45rem;
+    }
+
+    .sub-header {
+        font-size: 1.02rem;
+        color: #4b5563;
         text-align: center;
         margin-bottom: 2rem;
     }
-    .sub-header {
-        font-size: 1.2rem;
-        color: #666;
-        text-align: center;
-        margin-bottom: 3rem;
+
+    .stButton > button {
+        border-radius: 999px;
+        font-weight: 600;
     }
-    .match-score {
-        font-size: 3rem;
-        font-weight: bold;
-        text-align: center;
-        color: #2E7D32;
+
+    .stTextInput > div > div,
+    .stTextArea > div > div > textarea {
+        border-radius: 12px;
     }
-    .match-score-low {
-        color: #C62828;
-    }
-    .match-score-medium {
-        color: #F57C00;
+
+    [data-testid="stExpander"] {
+        border-radius: 14px;
+        border: 1px solid #e5e7eb;
+        background: #ffffff;
     }
 </style>
 """, unsafe_allow_html=True)
 
 def main():
-    st.markdown('<div class="main-header">💼 Career Coach AI</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-header">Your personal resume-to-job alignment assistant</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header">Career Coach AI</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-header">Beautifully simple resume-to-job alignment</div>', unsafe_allow_html=True)
     
     # Sidebar configuration
     with st.sidebar:
@@ -131,15 +148,24 @@ def main():
                 help="Paste the URL of the job posting you're interested in",
                 key=f"job_url_input_{st.session_state.job_url_input_key}"
             )
+            
+            # Manual job description input
+            manual_job_text = st.text_area(
+                "Or paste job description manually", 
+                placeholder="If URL extraction fails, paste the job description here...",
+                help="Use this if the URL cannot be extracted automatically",
+                height=100,
+                key=f"manual_job_text_{st.session_state.job_url_input_key}"
+            )
 
         has_resume_source = bool(uploaded_file or st.session_state.resume_text)
-        has_job_source = bool(job_url.strip())
+        has_job_source = bool(job_url.strip() or manual_job_text.strip())
 
         step_col1, step_col2, step_col3 = st.columns(3)
         with step_col1:
             st.write(f"{'✅' if has_resume_source else '⬜'} **1. Resume Uploaded**")
         with step_col2:
-            st.write(f"{'✅' if has_job_source else '⬜'} **2. Job URL Added**")
+            st.write(f"{'✅' if has_job_source else '⬜'} **2. Job Source Added**")
         with step_col3:
             st.write(f"{'✅' if st.session_state.analysis_complete else '⬜'} **3. Analysis Complete**")
 
@@ -152,10 +178,10 @@ def main():
             can_analyze = has_resume_source and has_job_source
             if st.button("🔍 Analyze Match", type="primary", disabled=not can_analyze) and can_analyze:
                 with st.spinner("Analyzing your resume and job posting..."):
-                    process_analysis(uploaded_file, job_url.strip(), min_match_threshold)
+                    process_analysis(uploaded_file, job_url.strip(), manual_job_text.strip(), min_match_threshold)
 
             if not can_analyze:
-                st.caption("Add both a resume and a job URL to enable analysis.")
+                st.caption("Add both a resume and a job source (URL or manual description) to enable analysis.")
 
         with action_col2:
             if st.button("🧹 Clear Analysis", type="secondary", help="Clear the current analysis report"):
@@ -173,7 +199,7 @@ def main():
     if st.session_state.analysis_complete:
         display_results()
 
-def process_analysis(uploaded_file, job_url, min_match_threshold):
+def process_analysis(uploaded_file, job_url, manual_job_text, min_match_threshold):
     """Process the resume and job URL to generate analysis."""
     
     # Extract resume text
@@ -193,9 +219,15 @@ def process_analysis(uploaded_file, job_url, min_match_threshold):
     # Extract job posting text
     if not st.session_state.job_text:
         with st.spinner("Extracting job posting content..."):
-            job_text = extract_text_from_url(job_url)
+            job_text = ""
+            if job_url:
+                job_text, extraction_reason = extract_text_from_url_with_reason(job_url)
+                if not job_text and extraction_reason:
+                    st.info(extraction_reason)
+            if not job_text and manual_job_text:
+                job_text = manual_job_text
             if not job_text:
-                st.error("Could not extract content from the job URL. Please check the link.")
+                st.error("Could not extract content from the job URL or manual input. Please check the link or provide job description manually.")
                 return
             st.session_state.job_text = job_text
     
